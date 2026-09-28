@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+data/runs.jsonl
+data/nvidia_key.dpapi
+data/nvidia_key.tmp
