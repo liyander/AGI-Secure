@@ -21,21 +21,27 @@ The Playground keeps separate model IDs for Ollama and NVIDIA. When you select N
 
 - **Attack lab** runs the same scenario and attacker-controlled input with controls off and on. It shows side-by-side model responses, tool requests and results, guard decisions, deterministic evidence, and synthetic state changes. You can disable individual guardrails to see which layer matters.
 - Playground with vulnerable and protected modes, custom prompts, role selection, and editable base system prompt.
-- Five scenario categories: rogue agent, privacy, fairness, toy cyber target, and high-risk response boundary.
+- Five scenario categories across six scenarios: rogue agent, two privacy paths, fairness, toy cyber target, and high-risk response boundary.
 - Real model tool calls against a per-run synthetic world. The protected mode checks role, data classification, and capabilities before execution, then scans output.
 - Timeline of model requests, tool requests and results, policy decisions, and state changes.
 - Local JSON Lines run history in `data/runs.jsonl` and a report calculated from completed runs.
 - Paired fairness evaluation calls the selected model twice. Protected mode removes the irrelevant attribute before sending each profile.
+- A **guided demonstration** at the top of Attack lab lets you choose one of six questions, inspect the expected sequence and evidence, and run a local check without a model. Its live comparison button uses the selected model and guardrails, then opens a three-step explanation, paired outcomes, key events, and expandable full traces.
+  - **Tool-policy probes:** the rogue-agent, payroll, and toy-cyber cases submit a fixed synthetic tool request to the same guardrail engine used in a protected run. This shows each layer's allow or deny decision without implying that a model would make that request.
+  - **Presidio:** focused email, phone, and demo-account recognizers return entity spans and anonymized text. `PRIV-002` shows the actual model-bound message before and after pre-model redaction. The preview itself makes no model call.
+  - **Fairlearn:** a seeded synthetic cohort uses `MetricFrame` to show group selection rates and held-out accuracy before and after `ThresholdOptimizer` with a demographic-parity constraint. This cohort is separate from the two-call model consistency test.
+  - **Behavior monitor:** every relevant event updates tool-request, denial, goal-drift, and sensitive-read counts. A threshold crossing creates a live `monitor_alert` trace event. You can change a threshold and recalculate alerts for the last protected run.
+  - **CBRN boundary:** fixed safe and risky probes show the local pre-model rule's allow/block decisions. The risky probe contains no operational detail; the benign probe exposes overblocking.
 
 The user interface shows an offline model state until a provider is available. It does not fabricate model responses or demonstration metrics. Each run gets a fresh copy of the synthetic world, so one experiment cannot contaminate another.
 
 ## Running an in-depth demonstration
 
-1. Open **Attack lab** and choose a scenario. The setup explains the attacker's controlled surface, objective, authorized task, and protected resource.
-2. Review or edit the attacker text for the rogue agent, privacy, or toy cyber scenario. The rogue agent text is placed inside a retrieved document; the others use the user-request surface. Fairness and high-risk safety use fixed test inputs.
-3. Run the comparison. The app executes an attack baseline and a protected run against fresh copies of the synthetic world. Both use the same model and scenario input.
-4. Open the execution traces to see model tool requests, tool results, policy checks, and state changes. The guardrail decisions table lists each enabled layer's decision.
-5. Disable one guardrail and rerun. For example, disabling **Untrusted data boundary** in the rogue agent scenario lets you observe whether goal and data guards still deny an attempted private-file read.
+1. Open **Attack lab**, pick a case card, and read the four-step path and **What counts as evidence?** guidance.
+2. Click the case's **local control check**. This works without a model or API key and shows actual policy, Presidio, Fairlearn, or safety-filter output.
+3. When a model is connected, click **Run live comparison**. Use **Continue to model comparison** if you want to edit the payload, model, or selected guardrails first.
+4. Read **What happened in this pair** before interpreting the two outcomes. The result cards show key events; expand **Full execution trace** for all model and tool messages.
+5. Use **Try one change next** to switch off a suggested guardrail, then rerun. Check whether another layer still blocks the same proposed action. In the rogue-agent case, the forged document requests a private file while the legitimate user asks only for a summary.
 
 The toy cyber environment contains a deliberately exposed synthetic debug credential. The model must actually use the internal tools to log in and reach the restricted flag. The app never targets external systems.
 
@@ -43,8 +49,10 @@ A raw run that does not reach the objective cannot demonstrate that a defense pr
 
 ## API
 
-`GET /api/health`, `GET /api/models/nvidia`, `GET /api/settings`, `PUT /api/settings/nvidia-key`, `DELETE /api/settings/nvidia-key`, `GET /api/scenarios`, `GET /api/guardrails`, `POST /api/compare`, `POST /api/chat`, `POST /api/run-attack`, `POST /api/run-defense`, `POST /api/fairness`, `GET /api/events`, `GET /api/evaluation`, `WS /api/events/live`. Key changes are restricted to requests from the same computer.
+`GET /api/health`, `GET /api/models/nvidia`, `GET /api/settings`, `PUT /api/settings/nvidia-key`, `DELETE /api/settings/nvidia-key`, `GET /api/scenarios`, `GET /api/scenarios/{scenario_id}/probe`, `GET /api/guardrails`, `POST /api/compare`, `POST /api/chat`, `POST /api/run-attack`, `POST /api/run-defense`, `POST /api/fairness`, `POST /api/privacy/preview`, `GET /api/fairness/demo`, `POST /api/monitor/evaluate`, `GET /api/safety/probes`, `GET /api/events`, `GET /api/evaluation`, `WS /api/events/live`. Key changes are restricted to requests from the same computer.
 
 ## Limits
 
 The high-risk response label is a simple refusal heuristic and should be reviewed manually. Attack success is determined from known synthetic markers, tool results, and state changes, not an LLM judge. These metrics describe this contained lab and are not a certification of a model's broader security.
+
+Presidio in this demo uses three focused patterns, not its full NLP recognizer catalog; it can miss other identifiers. Raw comparison runs and event history can contain the entered text, so use synthetic data only. Monitor thresholds are deterministic teaching defaults, not a trained anomaly baseline. Fairlearn's toy cohort shows a group-rate intervention on synthetic labels; it does not establish fairness of a real hiring decision. The CBRN filter is a narrow local rule, not a comprehensive safety system.

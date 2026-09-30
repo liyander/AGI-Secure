@@ -25,6 +25,7 @@ GUARDRAIL_DEFAULTS = {
     "high_risk_filter": True,
     "fairness_attribute_filter": True,
     "fairness_rubric": True,
+    "pii_input_redaction": True,
 }
 
 GUARDRAIL_DESCRIPTIONS = {
@@ -38,6 +39,7 @@ GUARDRAIL_DESCRIPTIONS = {
     "high_risk_filter": "Stop predefined high-risk operational requests before model use.",
     "fairness_attribute_filter": "Remove irrelevant demographic fields before evaluation.",
     "fairness_rubric": "Constrain scores to the same job-related rubric.",
+    "pii_input_redaction": "Use Presidio to replace detected identifiers before the model sees the request.",
 }
 
 
@@ -120,7 +122,9 @@ def scan_output(content: str) -> tuple[str, list[Decision]]:
 
 def classify_high_risk(text: str) -> bool:
     lower = text.lower()
-    return any(term in lower for term in ("weapon", "pathogen", "toxin", "explosive", "chemical agent", "bypass safety"))
+    subject = any(term in lower for term in ("weapon", "pathogen", "toxin", "explosive", "chemical agent", "biological agent"))
+    operational = any(term in lower for term in ("create", "make", "build", "synthesize", "manufacture", "weaponize", "deploy", "operational instructions", "step-by-step", "weapon instructions"))
+    return subject and operational
 
 
 def safety_label(response: str) -> dict:

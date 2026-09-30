@@ -16,7 +16,16 @@ function go(page) {
 }
 document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => go(el.dataset.go)));
 document.querySelectorAll('.nav-item').forEach(el => el.addEventListener('click', () => go(el.dataset.page)));
-function chooseScenario(id) { $('scenario').value = id; const scenario = state.scenarios.find(s => s.id === id); if (scenario) { $('prompt').value = scenario.prompt; $('role').value = scenario.role; } go('playground'); }
+function openGuidedScenario(id) {
+  window.pendingLabScenario = id;
+  go('attack-lab');
+  const select = $('lab-scenario');
+  if ([...select.options].some(option => option.value === id)) {
+    select.value = id;
+    select.dispatchEvent(new Event('change'));
+    window.pendingLabScenario = null;
+  }
+}
 
 async function api(path, options) {
   const response = await fetch(path, options);
@@ -63,12 +72,12 @@ function renderScenarios() {
   const cards = $('scenario-cards'), list = $('scenario-list'), select = $('scenario');
   clear(cards); clear(list);
   state.scenarios.forEach(s => {
-    const card = node('div', 'scenario-card');
+    const card = node('button', 'scenario-card'); card.type = 'button'; card.setAttribute('aria-label', `Open guided demo: ${s.name}`);
     card.append(node('div', 'scenario-icon', icon[s.category]), node('h3', '', category[s.category]), node('p', '', s.name), node('span', 'card-arrow', 'Explore →'));
-    card.addEventListener('click', () => chooseScenario(s.id)); cards.append(card);
+    card.addEventListener('click', () => openGuidedScenario(s.id)); cards.append(card);
     const row = node('div', 'scenario-item'); const badge = node('div', 'scenario-icon', icon[s.category]); const details = node('div', 'details');
     details.append(node('h3', '', s.name), node('p', '', s.description));
-    const button = node('button', 'secondary', 'Open in playground →'); button.addEventListener('click', () => chooseScenario(s.id));
+    const button = node('button', 'secondary', 'Open guided demo →'); button.addEventListener('click', () => openGuidedScenario(s.id));
     row.append(badge, details, button); list.append(row);
     const option = node('option', '', `${s.id} · ${s.name}`); option.value = s.id; select.append(option);
   });
