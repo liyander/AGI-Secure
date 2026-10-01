@@ -68,7 +68,17 @@
   function showPolicy(data, target) {
     const action = data.proposed_action;
     target.append(make('h4', '', `Fixed proposed action: ${action.tool}(${JSON.stringify(action.arguments)})`));
+    target.append(line('Selected configuration', data.allowed ? 'ALLOW — no selected layer denies this fixed action' : 'DENY — at least one selected layer denies this fixed action', data.allowed ? 'deny' : 'allow'));
     for (const decision of data.decisions) target.append(line(decision.source.replaceAll('_', ' '), `${decision.decision.toUpperCase()} · ${decision.reason}`, decision.decision));
+    if (data.ablations) {
+      target.append(make('h4', 'wb-ablation-title', 'What if one guard is switched off?'));
+      for (const item of data.ablations) {
+        const result = item.allowed_without_guard ? 'Action would be allowed' : `Still denied by ${item.denied_by_remaining.join(', ')}`;
+        target.append(line(`${item.guardrail.replaceAll('_', ' ')} ${item.enabled_now ? 'off' : 'already off'}`, result, item.allowed_without_guard ? 'deny' : 'allow'));
+      }
+      const rerun = make('button', 'secondary wb-recheck', 'Recheck selected guards');
+      rerun.type = 'button'; rerun.addEventListener('click', runProbe); target.append(rerun);
+    }
     target.append(make('p', 'wb-footnote', data.note));
   }
   function showPrivacy(data, target, original) {
@@ -103,7 +113,8 @@
     button.disabled = true; button.textContent = 'Checking...'; target.hidden = false; target.textContent = 'Running the local check...';
     try {
       if (['ROGUE-001', 'PRIV-001', 'CYBER-001'].includes(id)) {
-        const data = await api(`/api/scenarios/${id}/probe`); target.replaceChildren(); showPolicy(data, target);
+        const guardrails = Object.fromEntries([...$('lab-guards').querySelectorAll('input[data-guard]')].map(input => [input.dataset.guard, input.checked]));
+        const data = await api('/api/policy/simulate', post({ scenario_id: id, guardrails })); target.replaceChildren(); showPolicy(data, target);
       } else if (id === 'PRIV-002') {
         const original = $('lab-payload').value;
         const data = await api('/api/privacy/preview', post({ text: original })); target.replaceChildren(); showPrivacy(data, target, original);
@@ -121,7 +132,52 @@
   document.addEventListener('lab:scenario', event => showScenario(event.detail));
   document.addEventListener('lab:run-start', () => { liveButton.disabled = true; liveButton.textContent = 'Running both modes...'; });
   document.addEventListener('lab:run-end', () => { liveButton.disabled = false; liveButton.textContent = 'Run live comparison →'; });
+  function fiveSlideNotes(data) {
+    const scenario = data.scenario, raw = data.raw, defended = data.defended;
+    const denials = [...new Set((defended.events || []).filter(item => item.event === 'policy_decision' && item.decision === 'deny').map(item => item.source))];
+    const toolCalls = [...new Set((raw.events || []).filter(item => item.event === 'tool_request').map(item => item.tool))];
+    let detection = `Raw tool requests: ${toolCalls.join(', ') || 'none observed'}. Protected deny layers: ${denials.join(', ') || 'none observed'}.`;
+    let outcome = `Raw objective ${raw.metrics.attack_success ? 'reached' : 'not reached'}; protected objective ${defended.metrics.attack_success ? 'reached' : 'not reached'}; ${defended.metrics.blocked_actions} action(s) blocked.`;
+    let limitation = 'A local policy probe shows how a fixed action would be judged; only the live trace shows what the model actually proposed.';
+    if (scenario.id === 'PRIV-002') {
+      detection = `Recognized identifiers in model-bound input: raw ${data.analysis.raw_identifiers_seen}; protected ${data.analysis.protected_identifiers_seen}.`;
+      outcome = `Input redaction ${defended.controls.pii_input_redaction ? 'enabled' : 'disabled'} in the protected run.`;
+      limitation = 'Focused recognizers can miss other kinds or formats of personal data.';
+    } else if (scenario.category === 'fairness') {
+      detection = `Paired score gap: raw ${raw.score_gap ?? 'unparsed'}; protected ${defended.score_gap ?? 'unparsed'}.`;
+      outcome = `Attribute filter ${defended.controls.fairness_attribute_filter ? 'on' : 'off'}; consistent rubric ${defended.controls.fairness_rubric ? 'on' : 'off'}.`;
+      limitation = 'A two-candidate difference is an investigation signal, not proof of group fairness.';
+    } else if (scenario.category === 'cbrn') {
+      detection = `Protected pre-model deny: ${denials.includes('high_risk_filter') ? 'observed' : 'not observed'}. Raw refusal heuristic: ${raw.metrics.refusal ? 'detected' : 'not detected'}.`;
+      outcome = `Protected refusal heuristic: ${defended.metrics.refusal ? 'detected' : 'not detected'}; blocked actions: ${defended.metrics.blocked_actions}.`;
+      limitation = 'The input rule and refusal heuristic are narrow teaching checks; review model responses manually.';
+    }
+    const blockedClaim = defended.metrics?.blocked_actions ? 'At least one protected action was explicitly blocked.' : 'No protected action block was recorded; do not attribute the outcome to a runtime tool denial.';
+    return [
+      `# Slide 1 — Risk Identification\nRisk: ${scenario.name} (${scenario.id}).\nHow it occurs: ${scenario.description}\nAuthorized task: ${scenario.objective}\nProtected resource: ${scenario.protected_resource}.`,
+      `# Slide 2 — Risk Detection\n${detection}\nEvidence: inspect the paired execution traces and local control check.\nScreenshot: capture the detection decision and the relevant trace event.`,
+      `# Slide 3 — Risk Mitigation & Guardrails\nSelected controls: ${Object.entries(defended.controls || {}).filter(([, enabled]) => enabled).map(([name]) => name.replaceAll('_', ' ')).join(', ') || 'none reported'}.\nBefore vs. after: ${outcome}\n${blockedClaim}`,
+      `# Slide 4 — Working Demonstration\nFlow: AI system → risk input → detection → selected guardrail → observed result.\nOpen Attack lab, choose ${scenario.id}, run the local check, run the live comparison, then inspect key events and full traces.\nComparison ID: ${data.comparison_id}. Raw run: ${raw.run_id}. Protected run: ${defended.run_id}.\nDemo: http://127.0.0.1:8765/ (while the app is running locally).`,
+      `# Slide 5 — Summary & Learning\nFinding: ${outcome}\nLimit: ${limitation}\nThese observations use a synthetic environment and the selected model; they are not a general security certification.`,
+    ].join('\n\n');
+  }
+  function showFiveSlideNotes(data) {
+    const old = $('wb-slides'); if (old) old.remove();
+    const notes = fiveSlideNotes(data);
+    const box = make('div', 'panel wb-slides'); box.id = 'wb-slides';
+    const head = make('div', 'wb-slides-head');
+    const title = make('div'); title.append(make('h3', '', 'Five-slide evidence notes'), make('p', '', 'Generated from this comparison. Copy the text into your presentation; no PPT file is created.'));
+    const copy = make('button', 'secondary', 'Copy notes'); copy.type = 'button';
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(notes); copy.textContent = 'Copied'; }
+      catch { copy.textContent = 'Select the text below to copy'; }
+    });
+    head.append(title, copy);
+    const preview = make('details', 'wb-slides-preview'); preview.append(make('summary', '', 'Preview all five slides'), make('pre', '', notes));
+    box.append(head, preview); $('lab-results').append(box);
+  }
   document.addEventListener('lab:comparison', event => {
+    showFiveSlideNotes(event.detail);
     const run = event.detail.defended;
     const old = $('wb-monitor'); if (old) old.remove();
     if (!run.monitor) return;

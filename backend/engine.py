@@ -33,7 +33,7 @@ class AgentEngine:
     def __init__(self, model: ModelProvider):
         self.model = model
 
-    async def run(self, prompt: str, protected: bool, role: str = "employee_assistant", objective: str = "", system_prompt: str = "", scenario_id: str | None = None, on_event: Any = None, attack_payload: str | None = None, guardrails: dict[str, bool] | None = None) -> dict:
+    async def run(self, prompt: str, protected: bool, role: str = "employee_assistant", objective: str = "", system_prompt: str = "", scenario_id: str | None = None, on_event: Any = None, attack_payload: str | None = None, guardrails: dict[str, bool] | None = None, memory_entries: list[dict] | None = None, approval_gate: Any = None) -> dict:
         world = World()
         world_before = world.snapshot()
         run_id = uuid.uuid4().hex[:12].upper()
@@ -71,6 +71,14 @@ class AgentEngine:
             elif attack_payload is not None and scenario["category"] != "fairness":
                 prompt = attack_payload
         objective = objective or prompt
+        if memory_entries:
+            for entry in memory_entries:
+                trusted = entry.get("trust") == "trusted"
+                if protected and not trusted:
+                    event("memory_quarantined", source=entry.get("source", "unknown"), reason="Untrusted persisted memory was excluded before the model request.")
+                else:
+                    prompt += f"\n\n[Stored memory from {entry.get('source', 'unknown')}]: {entry.get('text', '')}"
+                    event("memory_retrieved", source=entry.get("source", "unknown"), trust=entry.get("trust", "unknown"))
         if controls["pii_input_redaction"]:
             privacy = preview_redaction(prompt)
             if privacy["entities"]:
@@ -114,8 +122,17 @@ class AgentEngine:
                         result = "BLOCKED: " + " ".join(decision.reason for decision in denials)
                         event("action_blocked", tool=name, sources=[decision.source for decision in denials])
                     else:
-                        result = self._execute(world, name, args, event)
-                        executed_actions.append({"tool": name, "arguments": args, "result": result})
+                        approved = True
+                        if approval_gate and (name in {"send_email", "enable_admin_mode", "login"} or (name == "read_file" and str(args.get("path", "")).startswith("/private/")) or (name == "read_web_file" and str(args.get("path", "")).startswith("/admin/"))):
+                            event("approval_requested", tool=name, arguments=args, world_before=world.snapshot())
+                            approved = bool(await approval_gate({"tool": name, "arguments": args, "world_before": world.snapshot(), "decisions": [decision.as_dict() for decision in decisions]}))
+                            event("approval_decision", tool=name, decision="approve" if approved else "deny")
+                        if approved:
+                            result = self._execute(world, name, args, event)
+                            executed_actions.append({"tool": name, "arguments": args, "result": result})
+                        else:
+                            result = "BLOCKED: Human reviewer denied this synthetic action."
+                            event("action_blocked", tool=name, sources=["human_approval"])
                 else:
                     result = self._execute(world, name, args, event)
                     executed_actions.append({"tool": name, "arguments": args, "result": result})

@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/settings.css">
   <link rel="stylesheet" href="/lab.css">
   <link rel="stylesheet" href="/workbench.css">
+  <link rel="stylesheet" href="/advanced.css">
 </head>
 <body>
   <div class="app-shell">
@@ -19,6 +20,7 @@
         <button class="nav-item active" data-page="dashboard"><span>▦</span> Overview</button>
         <button class="nav-item" data-page="playground"><span>⌘</span> Playground</button>
         <button class="nav-item" data-page="attack-lab"><span>⇄</span> Attack lab</button>
+        <button class="nav-item" data-page="advanced-lab"><span>✦</span> Advanced lab</button>
         <button class="nav-item" data-page="scenarios"><span>◇</span> Scenarios</button>
         <button class="nav-item" data-page="events"><span>≡</span> Event log</button>
         <button class="nav-item" data-page="reports"><span>▥</span> Reports</button>
@@ -45,6 +47,7 @@
         <section id="events" class="page"><div class="page-heading compact"><div><div class="eyebrow">AUDIT TRAIL</div><h1>Event log</h1><p>Every completed run is recorded locally as JSON Lines.</p></div><button id="refresh-events" class="secondary">Refresh ↻</button></div><div id="event-list" class="panel event-list"></div></section>
         <section id="reports" class="page"><div class="page-heading compact"><div><div class="eyebrow">EVALUATION</div><h1>Run reports</h1><p>Observed outcomes from completed model executions. Empty metrics stay empty until tested.</p></div><button id="refresh-report" class="secondary">Refresh ↻</button></div><div id="report-summary" class="report-summary"></div><div class="panel"><div class="panel-head"><h3>Recent runs</h3><span class="tag">LAST 20</span></div><div id="report-table"></div></div></section>
         <section id="attack-lab" class="page"><div class="page-heading compact"><div><div class="eyebrow">EXPLOIT CHAIN · GUARDRAIL ABLATION</div><h1>Attack lab</h1><p>Run one controlled attack twice with the same model and payload. Turn individual guards off to see what each one changes.</p></div></div><div class="lab-layout"><div class="panel lab-config"><div class="panel-head"><h3>Experiment setup</h3><span class="tag">PAIR OF RUNS</span></div><label for="lab-scenario">Scenario</label><select id="lab-scenario"></select><div id="lab-brief" class="lab-brief"></div><label for="lab-provider">Model provider</label><select id="lab-provider"><option value="ollama">Local · Ollama</option><option value="nvidia">NVIDIA NIM</option></select><label for="lab-model">Model identifier</label><input id="lab-model" list="lab-model-options" spellcheck="false"><datalist id="lab-model-options"></datalist><small id="lab-model-hint" class="lab-hint"></small><label for="lab-variant">Attack technique</label><select id="lab-variant"></select><label id="lab-payload-label" for="lab-payload">Attacker-controlled text</label><textarea id="lab-payload" rows="7" spellcheck="false"></textarea><small id="lab-payload-hint" class="lab-hint"></small><div class="lab-divider"></div><div class="panel-head"><h3>Defense layers</h3><button id="lab-reset-guards" class="text-btn">Reset</button></div><div id="lab-guards" class="lab-guards"></div><button id="lab-run" class="primary full">Run side-by-side comparison <span>→</span></button><div id="lab-error" class="error" hidden></div></div><div class="lab-output"><div id="lab-intro" class="panel lab-intro"><div class="start-icon">⇄</div><h2>One input. Two outcomes.</h2><p>Select a scenario, inspect its attack surface, and run the same input with security controls off and on. The model decides which tools to call; code checks the resulting state.</p><div class="lab-process"><span>Attack surface</span><b>→</b><span>Model decision</span><b>→</b><span>Tool / guard</span><b>→</b><span>Observed outcome</span></div></div><div id="lab-results" hidden><div id="lab-summary" class="panel lab-summary"></div><div id="lab-columns" class="lab-columns"></div><div id="lab-decisions" class="panel lab-decisions"></div></div></div></div></section>
+        <section id="advanced-lab" class="page"></section>
         <section id="settings" class="page"><div class="page-heading compact"><div><div class="eyebrow">MODEL CONNECTION</div><h1>Settings</h1><p>Save your NVIDIA API key once, then select NVIDIA NIM in the Playground.</p></div></div><div class="settings-grid"><div class="panel settings-panel"><div class="panel-head"><h3>NVIDIA NIM API key</h3><span id="key-badge" class="tag">CHECKING</span></div><p class="setting-copy">The key is encrypted for your Windows account and stored on this computer. The dashboard never displays the saved value.</p><form id="key-form"><label for="api-key">API key</label><div class="key-field"><input id="api-key" type="password" autocomplete="new-password" placeholder="Paste your NVIDIA API key" required><button id="toggle-key" type="button" class="secondary">Show</button></div><div class="setting-actions"><button id="save-key" class="primary" type="submit">Save key</button><button id="delete-key" class="secondary" type="button">Remove saved key</button></div></form><div id="key-message" class="setting-message" role="status"></div></div><div class="panel guidance-panel"><div class="panel-head"><h3>Connection details</h3></div><div class="status-row"><span>Stored key</span><strong id="saved-key-status">Checking</strong></div><div class="status-row"><span>Local Ollama</span><strong id="settings-ollama-status">Checking</strong></div><p class="setting-copy">After saving, open the Playground, choose NVIDIA NIM, and enter a model identifier available to your NVIDIA account. The key remains on the server and is sent only to NVIDIA for model requests.</p><button class="text-btn" data-go="playground">Open playground →</button></div></div></section>
       </div>
     </main>
@@ -52,5 +55,6 @@
   <script src="/app.js"></script>
   <script src="/lab.js"></script>
   <script src="/workbench.js"></script>
+  <script src="/advanced.js"></script>
 </body>
 </html>
